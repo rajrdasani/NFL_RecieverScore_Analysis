@@ -1,0 +1,195 @@
+---
+title: "CatchScoreEDA"
+output: html_document
+date: "2023-08-10"
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(reshape2) 
+
+```
+
+Data was pulled manually from FiveThirtyEight 
+-- pulled into Excel, created a pivot table with all of the players as rows and columns for each stat for each year 
+-- Google Sheets Link: https://docs.google.com/spreadsheets/d/1PI-LMohmf9-yC4w9Fq4XyVQqt_umJd9Bau_nqpVD5Js/edit?usp=sharing
+
+
+```{r}
+data = read.csv("WR_Advanced_Stats - PivotData_Clean.csv")
+head(data)
+```
+
+## Which WRs had the biggest change in Catch Score from 2021 to 2022? 
+```{r}
+wrscore_21_22 = data %>%
+  select(Player, X2021_Overall, X2022_Overall) %>%
+  mutate(overall_delta = X2022_Overall - X2021_Overall) %>%
+  mutate(overall_delta_abs = abs(overall_delta)) %>%
+  na.exclude() %>%
+  arrange(desc(overall_delta_abs))
+  
+  
+wrscore_21_22 %>%
+  head(15) %>%
+  mutate(color = ifelse(overall_delta < 0, "#FFDDDD","#CCEEFF")) %>%
+  ggplot(aes(x = reorder(Player, -overall_delta), y = overall_delta, fill = color, label = overall_delta)) + 
+    geom_bar(stat="identity") +
+    geom_label() +
+    theme_minimal() +
+    labs(title = "Top 15 Biggest Delta in Overall WR Score from 2021 to 2022",
+         x = "Player", 
+         y = "Change in WR Score 2021-2022") + 
+    theme(axis.text.x = element_text(angle = 30, vjust = 0.7)) +
+    scale_fill_identity(guide = FALSE)
+
+```
+
+How do all WRs look 2021 to 2022?
+```{r}
+wrscore_21_22 %>%
+  ggplot(aes(x = X2021_Overall, y = X2022_Overall)) + 
+    geom_point(color = 'lightblue') +
+    geom_abline(slope=1, intercept = 0, color = 'lightgreen') +
+    geom_text(aes(30, 12, label = "Line for 2021 Score = 2022 Score (Y=x line)"), color = 'darkgreen') +
+    theme_minimal() + 
+    labs(title = "Biggest Delta in Overall WR Score from 2021 to 2022",
+         x = "2021 Catch Score", 
+         y = "2022 Catch Score")
+```
+
+Overall, WR Scores stay mostly consistent , but there are definitely players who's score change pretty significantly year to year. My hypothesis for this is a couple different factors:
+- previous year success (teams start to double this player more often)
+- team change (either the player himself or a change on the team)
+- injury in the current year (catch score doesnt have chance to stabilize)
+
+
+## Which WRs had the biggest change in Catch Score from any two years?
+
+
+```{r}
+data_overalls = data %>%
+  select(Player, X2017_Overall, X2018_Overall, X2019_Overall, X2020_Overall, X2021_Overall, X2022_Overall)
+
+data_overalls$max_overall <- apply(data_overalls[, 2:7], 1, max, na.rm=TRUE)
+data_overalls$min_overall <- apply(data_overalls[, 2:7], 1, min, na.rm=TRUE)
+
+
+wrscore_alldelta = data_overalls %>%
+  mutate(overall_delta = max_overall - min_overall) %>%
+  mutate(overall_delta_abs = abs(overall_delta)) %>%
+  arrange(desc(overall_delta_abs))
+  
+  
+wrscore_alldelta %>%
+  head(15) %>%
+  mutate(color = ifelse(overall_delta < 0, "#FFDDDD","#CCEEFF")) %>%
+  ggplot(aes(x = reorder(Player, -overall_delta), y = overall_delta, fill = color, label = overall_delta)) + 
+    geom_bar(stat="identity") +
+    geom_label() +
+    theme_minimal() +
+    labs(title = "Top 15 Biggest Delta in Overall WR Score between 2017 to 2022",
+         x = "Player", 
+         y = "Diff. of Max WR Score and Min WR Score") + 
+    theme(axis.text.x = element_text(angle = 30, vjust = 0.7)) +
+    scale_fill_identity(guide = FALSE)
+```
+
+Key Insights
+- A lot of top WRs here who either had an amazing season, and then had a drastic fall in WR score in following years (Antonio Brown, Julio Jones, Michael Thomas); or had a great season compared to their rookie years (Amari Cooper, Zay Jones)
+- A lot of TEs here, where opportunity and involvement in the pass game was more of a clear factor
+
+
+## Which WRs had the biggest change in Catch Score from two CONSECUTIVE years?
+
+```{r}
+wrscore_21_22 = wrscore_21_22 %>%
+  rename(Y0_Overall = X2021_Overall,
+         Y1_Overall = X2022_Overall) %>%
+  mutate(Player = paste(Player, "21-22"))
+
+wrscore_20_21 = data %>%
+  select(Player, X2020_Overall, X2021_Overall) %>%
+  mutate(overall_delta = X2021_Overall - X2020_Overall) %>%
+  mutate(overall_delta_abs = abs(overall_delta)) %>%
+  na.exclude() %>%
+  rename(Y0_Overall = X2020_Overall,
+         Y1_Overall = X2021_Overall) %>%
+  mutate(Player = paste(Player, "20-21"))
+
+wrscore_19_20 = data %>%
+  select(Player, X2019_Overall, X2020_Overall) %>%
+  mutate(overall_delta = X2020_Overall - X2019_Overall) %>%
+  mutate(overall_delta_abs = abs(overall_delta)) %>%
+  na.exclude() %>%
+  rename(Y0_Overall = X2019_Overall,
+         Y1_Overall = X2020_Overall) %>%
+  mutate(Player = paste(Player, "19-20"))
+
+wrscore_18_19 = data %>%
+  select(Player, X2018_Overall, X2019_Overall) %>%
+  mutate(overall_delta = X2019_Overall - X2018_Overall) %>%
+  mutate(overall_delta_abs = abs(overall_delta)) %>%
+  na.exclude() %>%
+  rename(Y0_Overall = X2018_Overall,
+         Y1_Overall = X2019_Overall) %>%
+  mutate(Player = paste(Player, "18-19"))
+
+wrscore_17_18 = data %>%
+  select(Player, X2017_Overall, X2018_Overall) %>%
+  mutate(overall_delta = X2018_Overall - X2017_Overall) %>%
+  mutate(overall_delta_abs = abs(overall_delta)) %>%
+  na.exclude() %>%
+  rename(Y0_Overall = X2018_Overall,
+         Y1_Overall = X2017_Overall) %>%
+  mutate(Player = paste(Player, "17-18"))
+
+
+wrscore_deltas = rbind(wrscore_21_22, wrscore_20_21, wrscore_19_20, wrscore_18_19, wrscore_17_18) %>%
+    arrange(desc(overall_delta_abs))
+```
+
+```{r}
+wrscore_deltas %>%
+  head(20) %>%
+  mutate(color = ifelse(overall_delta < 0, "#FFDDDD","#CCEEFF")) %>%
+  ggplot(aes(x = reorder(Player, -overall_delta), y = overall_delta, fill = color, label = overall_delta)) + 
+    geom_bar(stat="identity") +
+    geom_label() +
+    theme_minimal() +
+    labs(title = "Top 15 Biggest Delta in Overall WR Scores",
+         caption = "Exp: First bar is Amari Cooper's 2018 WR Score minus 2017 WR Score",
+         x = "Player (Two Seasons for Delta)", 
+         y = "Change in WR Scores") + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.7)) +
+    scale_fill_identity(guide = FALSE)
+```
+
+
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+Filter for only players with at least two seasons
+```{r}
+data_overall = data %>%
+  select(Player, X2017_Overall, X2018_Overall, X2019_Overall, X2020_Overall, X2021_Overall, X2022_Overall)
+
+#get consecutive years 
+data_overall$consecutive_years <- (apply(!is.na(data_overall[-1]),1,
+            function(x) any(with(rle(x), lengths[values])>1)))+0
+
+consecutiveyears_players = data_overall %>%
+  filter(consecutive_years > 0) %>%
+  select(Player) 
+
+nrow(consecutiveyears_players)
+```
+
+The number of players that have at least two consecutive seasons with the threshold of targets is 141
+
+
+

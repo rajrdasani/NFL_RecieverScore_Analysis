@@ -1,0 +1,28 @@
+---
+title: "CatchScorePredictionModels"
+output: html_document
+date: "2023-08-15"
+---
+
+
+
+
+
+```{r}
+data = read.csv("WR_Advanced_Stats - PivotData_Clean.csv")
+head(data)
+```
+
+
+
+
+Subset y-variable as 2022 GameScore
+```{r}
+y_data = data %>%
+  filter(Year == 2022) %>%
+  select("Player", "OVERALL")
+
+paste(nrow(y_data), "Quarterbacks in 2022 Dataset")
+
+
+```
