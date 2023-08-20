@@ -18,7 +18,7 @@ Data was pulled manually from FiveThirtyEight
 
 
 ```{r}
-data = read.csv("WR_Advanced_Stats - PivotData_Clean.csv")
+data = read.csv("../Data/WR_Advanced_Stats - PivotData_Clean.csv")
 head(data)
 ```
 
@@ -45,25 +45,32 @@ wrscore_21_22 %>%
     theme(axis.text.x = element_text(angle = 30, vjust = 0.7)) +
     scale_fill_identity(guide = FALSE)
 
+ggsave("../Images/BiggestCatchScoreDelta_2021v2022.png", bg="white")
+
 ```
 
 How do all WRs look 2021 to 2022?
 ```{r}
+library(ggrepel)
+
+
 wrscore_21_22 %>%
-  ggplot(aes(x = X2021_Overall, y = X2022_Overall)) + 
-    geom_point(color = 'lightblue') +
+  ggplot(aes(x = X2021_Overall, y = X2022_Overall, label = Player)) + 
+    geom_point(color = 'lightblue' ) +
+    geom_text_repel(aes(label=ifelse(overall_delta_abs>16,as.character(Player),'')), vjust=0,hjust="inward",size = 3) +
     geom_abline(slope=1, intercept = 0, color = 'lightgreen') +
     geom_text(aes(30, 12, label = "Line for 2021 Score = 2022 Score (Y=x line)"), color = 'darkgreen') +
     theme_minimal() + 
     labs(title = "Biggest Delta in Overall WR Score from 2021 to 2022",
+         subtitle = "Players labeled have Overall Catch Score Delta greater than 16",
          x = "2021 Catch Score", 
          y = "2022 Catch Score")
+
+ggsave("../Images/CatchScore_2021v2022.png", bg="white")
+
 ```
 
-Overall, WR Scores stay mostly consistent , but there are definitely players who's score change pretty significantly year to year. My hypothesis for this is a couple different factors:
-- previous year success (teams start to double this player more often)
-- team change (either the player himself or a change on the team)
-- injury in the current year (catch score doesnt have chance to stabilize)
+Overall, players who have a high score keep consistent catch scores, unless a player deals with injury (Andrews, Kupp) or situations changed and they became more of a primary weapon on their team, limiting their catch ability (Adams, Kirk)
 
 
 ## Which WRs had the biggest change in Catch Score from any two years?
@@ -86,15 +93,18 @@ wrscore_alldelta = data_overalls %>%
 wrscore_alldelta %>%
   head(15) %>%
   mutate(color = ifelse(overall_delta < 0, "#FFDDDD","#CCEEFF")) %>%
-  ggplot(aes(x = reorder(Player, -overall_delta), y = overall_delta, fill = color, label = overall_delta)) + 
+  ggplot(aes(x = reorder(Player, -overall_delta), y = overall_delta, fill = '#CBC3E3', label = overall_delta)) + 
     geom_bar(stat="identity") +
     geom_label() +
     theme_minimal() +
-    labs(title = "Top 15 Biggest Delta in Overall WR Score between 2017 to 2022",
+    labs(title = "Top 15 Biggest Delta in Overall WR Score between any two years (17-22)",
          x = "Player", 
          y = "Diff. of Max WR Score and Min WR Score") + 
     theme(axis.text.x = element_text(angle = 30, vjust = 0.7)) +
     scale_fill_identity(guide = FALSE)
+
+ggsave("../Images/BiggestCatchScoreDelta_2017_2022.png", bg = 'white')
+
 ```
 
 Key Insights
@@ -165,6 +175,9 @@ wrscore_deltas %>%
          y = "Change in WR Scores") + 
     theme(axis.text.x = element_text(angle = 90, vjust = 0.7)) +
     scale_fill_identity(guide = FALSE)
+
+ggsave("../Images/BiggestCatchScoreDelta_consecutive.png", bg = 'white')
+
 ```
 
 

@@ -1,0 +1,408 @@
+---
+title: "CatchScorePredictionModels"
+output: html_document
+date: "2023-08-15"
+---
+
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(reshape2) 
+
+```
+
+
+```{r}
+data = read.csv("WR_Advanced_Stats - PivotData_Clean.csv")
+head(data)
+```
+
+Create table that has player column for a single year, with the deltas of the previous year
+
+Yards columns loaded in as character, so change them 
+```{r}
+data = data %>%
+  mutate_at(c('X2017_Yards', 'X2018_Yards', 'X2019_Yards', 'X2020_Yards', 'X2021_Yards', 'X2022_Yards'), readr::parse_number)
+```
+
+```{r}
+wrscore_21_22 = data %>%
+  select(Player, 
+         X2021_Team, X2021_Yards, X2021_YardsRun, X2021_Targets, X2021_YardsPerRoute, X2021_OpenScore, X2021_CatchScore, X2021_YACScore, X2021_Overall,
+         X2022_Team, X2022_Yards, X2022_YardsRun, X2022_Targets, X2022_YardsPerRoute, X2022_OpenScore, X2022_CatchScore, X2022_YACScore, X2022_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2021_Team == X2022_Team), 
+    yards_delta = X2022_Yards - X2021_Yards, 
+    yardsrun_delta = X2022_YardsRun - X2021_YardsRun,
+    targets_delta = X2022_Targets - X2021_Targets,
+    yardsperroute_delta = X2022_YardsPerRoute - X2021_YardsPerRoute,
+    openscore_delta = X2022_OpenScore - X2021_OpenScore,
+    catchscore_delta = X2022_CatchScore - X2021_CatchScore,
+    yacscore_delta = X2022_YACScore - X2021_YACScore,
+    overall_delta = X2022_Overall - X2021_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "21-22")) %>%
+  rename(Y0_Yards = X2021_Yards,
+         Y1_Yards = X2022_Yards,
+         Y0_YardsRun = X2021_YardsRun,
+         Y1_YardsRun = X2022_YardsRun,
+         Y0_Targets = X2021_Targets,
+         Y1_Targets = X2022_Targets,
+         Y0_YardsPerRoute = X2021_YardsPerRoute,
+         Y1_YardsPerRoute = X2022_YardsPerRoute,
+         Y0_CatchScore = X2021_CatchScore,
+         Y1_CatchScore = X2022_CatchScore,
+         Y0_OpenScore = X2021_OpenScore,
+         Y1_OpenScore = X2022_OpenScore,
+         Y0_YACScore = X2021_YACScore,
+         Y1_YACScore = X2022_YACScore,
+         Y0_Overall = X2021_Overall,
+         Y1_Overall = X2022_Overall) %>%
+  select(-X2021_Team, -X2022_Team)
+   
+
+wrscore_20_21 = data %>%
+  select(Player, 
+         X2021_Team, X2021_Yards, X2021_YardsRun, X2021_Targets, X2021_YardsPerRoute, X2021_OpenScore, X2021_CatchScore, X2021_YACScore, X2021_Overall,
+         X2020_Team, X2020_Yards, X2020_YardsRun, X2020_Targets, X2020_YardsPerRoute, X2020_OpenScore, X2020_CatchScore, X2020_YACScore, X2020_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2021_Team == X2020_Team), 
+    yards_delta = X2021_Yards - X2020_Yards, 
+    yardsrun_delta = X2021_YardsRun - X2020_YardsRun,
+    targets_delta = X2021_Targets - X2020_Targets,
+    yardsperroute_delta = X2021_YardsPerRoute - X2020_YardsPerRoute,
+    openscore_delta = X2021_OpenScore - X2020_OpenScore,
+    catchscore_delta = X2021_CatchScore - X2020_CatchScore,
+    yacscore_delta = X2021_YACScore - X2020_YACScore,
+    overall_delta = X2021_Overall - X2020_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "20-21")) %>%
+  rename(Y0_Yards = X2020_Yards,
+         Y1_Yards = X2021_Yards,
+         Y0_YardsRun = X2020_YardsRun,
+         Y1_YardsRun = X2021_YardsRun,
+         Y0_Targets = X2020_Targets,
+         Y1_Targets = X2021_Targets,
+         Y0_YardsPerRoute = X2020_YardsPerRoute,
+         Y1_YardsPerRoute = X2021_YardsPerRoute,
+         Y0_CatchScore = X2020_CatchScore,
+         Y1_CatchScore = X2021_CatchScore,
+         Y0_OpenScore = X2020_OpenScore,
+         Y1_OpenScore = X2021_OpenScore,
+         Y0_YACScore = X2020_YACScore,
+         Y1_YACScore = X2021_YACScore,
+         Y0_Overall = X2020_Overall,
+         Y1_Overall = X2021_Overall) %>%
+  select(-X2021_Team, -X2020_Team)
+
+wrscore_19_20 = data %>%
+  select(Player, 
+         X2019_Team, X2019_Yards, X2019_YardsRun, X2019_Targets, X2019_YardsPerRoute, X2019_OpenScore, X2019_CatchScore, X2019_YACScore, X2019_Overall,
+         X2020_Team, X2020_Yards, X2020_YardsRun, X2020_Targets, X2020_YardsPerRoute, X2020_OpenScore, X2020_CatchScore, X2020_YACScore, X2020_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2019_Team == X2020_Team), 
+    yards_delta = X2020_Yards - X2019_Yards, 
+    yardsrun_delta = X2020_YardsRun - X2019_YardsRun,
+    targets_delta = X2020_Targets - X2019_Targets,
+    yardsperroute_delta = X2020_YardsPerRoute - X2019_YardsPerRoute,
+    openscore_delta = X2020_OpenScore - X2019_OpenScore,
+    catchscore_delta = X2020_CatchScore - X2019_CatchScore,
+    yacscore_delta = X2020_YACScore - X2019_YACScore,
+    overall_delta = X2020_Overall - X2019_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "19-20")) %>%
+  rename(Y0_Yards = X2019_Yards,
+         Y1_Yards = X2020_Yards,
+         Y0_YardsRun = X2019_YardsRun,
+         Y1_YardsRun = X2020_YardsRun,
+         Y0_Targets = X2019_Targets,
+         Y1_Targets = X2020_Targets,
+         Y0_YardsPerRoute = X2019_YardsPerRoute,
+         Y1_YardsPerRoute = X2020_YardsPerRoute,
+         Y0_CatchScore = X2019_CatchScore,
+         Y1_CatchScore = X2020_CatchScore,
+         Y0_OpenScore = X2019_OpenScore,
+         Y1_OpenScore = X2020_OpenScore,
+         Y0_YACScore = X2019_YACScore,
+         Y1_YACScore = X2020_YACScore,
+         Y0_Overall = X2019_Overall,
+         Y1_Overall = X2020_Overall) %>%
+  select(-X2019_Team, -X2020_Team)
+
+wrscore_18_19 = data %>%
+  select(Player, 
+         X2019_Team, X2019_Yards, X2019_YardsRun, X2019_Targets, X2019_YardsPerRoute, X2019_OpenScore, X2019_CatchScore, X2019_YACScore, X2019_Overall,
+         X2018_Team, X2018_Yards, X2018_YardsRun, X2018_Targets, X2018_YardsPerRoute, X2018_OpenScore, X2018_CatchScore, X2018_YACScore, X2018_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2019_Team == X2018_Team), 
+    yards_delta = X2019_Yards - X2018_Yards, 
+    yardsrun_delta = X2019_YardsRun - X2018_YardsRun,
+    targets_delta = X2019_Targets - X2018_Targets,
+    yardsperroute_delta = X2019_YardsPerRoute - X2018_YardsPerRoute,
+    openscore_delta = X2019_OpenScore - X2018_OpenScore,
+    catchscore_delta = X2019_CatchScore - X2018_CatchScore,
+    yacscore_delta = X2019_YACScore - X2018_YACScore,
+    overall_delta = X2019_Overall - X2018_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "18-19")) %>%
+  rename(Y0_Yards = X2018_Yards,
+         Y1_Yards = X2019_Yards,
+         Y0_YardsRun = X2018_YardsRun,
+         Y1_YardsRun = X2019_YardsRun,
+         Y0_Targets = X2018_Targets,
+         Y1_Targets = X2019_Targets,
+         Y0_YardsPerRoute = X2018_YardsPerRoute,
+         Y1_YardsPerRoute = X2019_YardsPerRoute,
+         Y0_CatchScore = X2018_CatchScore,
+         Y1_CatchScore = X2019_CatchScore,
+         Y0_OpenScore = X2018_OpenScore,
+         Y1_OpenScore = X2019_OpenScore,
+         Y0_YACScore = X2018_YACScore,
+         Y1_YACScore = X2019_YACScore,
+         Y0_Overall = X2018_Overall,
+         Y1_Overall = X2019_Overall) %>%
+  select(-X2019_Team, -X2018_Team)
+
+wrscore_17_18 = data %>%
+  select(Player, 
+         X2017_Team, X2017_Yards, X2017_YardsRun, X2017_Targets, X2017_YardsPerRoute, X2017_OpenScore, X2017_CatchScore, X2017_YACScore, X2017_Overall,
+         X2018_Team, X2018_Yards, X2018_YardsRun, X2018_Targets, X2018_YardsPerRoute, X2018_OpenScore, X2018_CatchScore, X2018_YACScore, X2018_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2017_Team == X2018_Team), 
+    yards_delta = X2018_Yards - X2017_Yards, 
+    yardsrun_delta = X2018_YardsRun - X2017_YardsRun,
+    targets_delta = X2018_Targets - X2017_Targets,
+    yardsperroute_delta = X2018_YardsPerRoute - X2017_YardsPerRoute,
+    openscore_delta = X2018_OpenScore - X2017_OpenScore,
+    catchscore_delta = X2018_CatchScore - X2017_CatchScore,
+    yacscore_delta = X2018_YACScore - X2017_YACScore,
+    overall_delta = X2018_Overall - X2017_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "17-18")) %>%
+  rename(Y0_Yards = X2017_Yards,
+         Y1_Yards = X2018_Yards,
+         Y0_YardsRun = X2017_YardsRun,
+         Y1_YardsRun = X2018_YardsRun,
+         Y0_Targets = X2017_Targets,
+         Y1_Targets = X2018_Targets,
+         Y0_YardsPerRoute = X2017_YardsPerRoute,
+         Y1_YardsPerRoute = X2018_YardsPerRoute,
+         Y0_CatchScore = X2017_CatchScore,
+         Y1_CatchScore = X2018_CatchScore,
+         Y0_OpenScore = X2017_OpenScore,
+         Y1_OpenScore = X2018_OpenScore,
+         Y0_YACScore = X2017_YACScore,
+         Y1_YACScore = X2018_YACScore,
+         Y0_Overall = X2017_Overall,
+         Y1_Overall = X2018_Overall) %>%
+  select(-X2017_Team, -X2018_Team)
+
+
+
+fulldata_deltas = rbind(wrscore_21_22, wrscore_20_21, wrscore_19_20, wrscore_18_19, wrscore_17_18)
+```
+
+Split into train/test
+```{r}
+sample <- sample(c(TRUE, FALSE), nrow(x_var), replace=TRUE, prob=c(0.8,0.2))
+train <- fulldata_deltas[sample, ]
+test <- fulldata_deltas[!sample, ]
+```
+
+
+Subset y-variable as Year 1 (vs Year 0) OverallScore
+Subset x-variables as all Y0 data and team_change
+
+Linear Regression Model
+```{r}
+wrscore.lm <- lm(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall,
+                 data = train)
+
+print(summary(wrscore.lm))
+
+```
+
+Overall it does ok with an R**2 of 0.3441, lets talk out some of the features 
+
+```{r}
+wrscore.lm <- lm(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_Overall,
+                 data = train)
+
+print(summary(wrscore.lm))
+
+```
+Outside of the previous year's overall score, nothing else had a strong prediction for overall 
+
+
+Lets test it now, assuming we do know the stats from the year. Even if we take away the 3 subset scores, there is probably some correlation among the data.
+
+Ex. Catch Score: ""For example, if the tracking data indicates a pass will be completed 75% of the time and the receiver actually catches the pass, he is credited with plus-0.25. If he does not catch the pass, he is debited at minus-0.75."" So with this, more targets should add to overall score as a whole.
+
+
+```{r}
+catchscore.lm <- lm(formula = Y1_CatchScore ~ Y1_Yards + Y1_YardsRun + Y1_Targets + Y1_YardsPerRoute,
+                 data = train)
+
+print(summary(catchscore.lm))
+
+
+openscore.lm <- lm(formula = Y1_OpenScore ~ Y1_Yards + Y1_YardsRun + Y1_Targets + Y1_YardsPerRoute,
+                 data = train)
+
+print(summary(openscore.lm))
+
+yacscore.lm <- lm(formula = Y1_YACScore ~ Y1_Yards + Y1_YardsRun + Y1_Targets + Y1_YardsPerRoute,
+                 data = train)
+
+print(summary(yacscore.lm))
+```
+
+Specifically 
+- Yards and Targets are highly correlated to CatchScore
+- Targets and YardsPerRoute is correlated to OpenScore
+- Yards and Targets is highly correlated to YACScore
+
+
+
+Using all doesn't lead to anything clear, lets do some feature selection
+
+Team Change Variable
+
+```{r}
+gg <- ggplot(fulldata_deltas, aes(Y0_Overall, Y1_Overall, colour = as.factor(team_change))) + 
+  geom_point() + 
+  geom_smooth(alpha=0.3, method="lm") + 
+  labs(title = "Year 0 Overall WR Score vs Year 1 Overall WR Score",
+       subtitle = "Players who did not change teams had a more consistent 
+       catch score on average compared to players who did change.")
+print(gg)
+```
+
+If there isnt a clear correlation for all the WRs together, lets see if we can create groupings to see if there are patterns among those
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+We'll use decision trees to analyze it as a whole to start
+
+Decision Tree
+```{r}
+library(tidymodels)
+
+tree_spec <- decision_tree() %>%
+ set_engine("rpart") %>%
+ set_mode("regression")
+
+# Fit the model to the training data
+tree_fit <- tree_spec %>%
+ fit(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall,
+                 data = train)
+
+# Make predictions on the testing data
+predictions <- tree_fit %>%
+ predict(test) %>%
+ pull(.pred)
+
+# Calculate RMSE and R-squared
+metrics <- metric_set(rmse, rsq)
+model_performance <- test %>%
+ mutate(predictions = predictions) %>%
+ metrics(truth = Y1_Overall, estimate = predictions)
+
+print(model_performance)
+```
+Even though it isnt great (a good amount worse than the linear regression model, lets see how it visualizes)
+
+```{r}
+# Load the library
+library(rpart.plot)
+
+# Plot the decision tree
+rpart.plot(tree_fit$fit, type = 5, extra = 101, under = TRUE, cex = 0.8, box.palette = "auto")
+```
+
+Try it without the advanced stats
+```{r}
+tree_spec <- decision_tree() %>%
+ set_engine("rpart") %>%
+ set_mode("regression")
+
+# Fit the model to the training data
+tree_fit <- tree_spec %>%
+ fit(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute,
+                 data = train)
+
+# Make predictions on the testing data
+predictions <- tree_fit %>%
+ predict(test) %>%
+ pull(.pred)
+
+# Calculate RMSE and R-squared
+metrics <- metric_set(rmse, rsq)
+model_performance <- test %>%
+ mutate(predictions = predictions) %>%
+ metrics(truth = Y1_Overall, estimate = predictions)
+
+print(model_performance)
+
+
+# Plot the decision tree
+rpart.plot(tree_fit$fit, type = 5, extra = 101, under = TRUE, cex = 0.8, box.palette = "auto")
+```
+
+Even though the model treats output as ints / categories rather than continuous, the model generally tells us that yards gained and yards per route are pretty big indicators for a reciever's overall score.
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+Now we'll use Regression Trees to create regressions for individual groups 
+
+```{r}
+library(rsample)     # data splitting 
+library(dplyr)       # data wrangling
+library(rpart)       # performing regression trees
+library(rpart.plot)  # plotting regression trees
+library(ipred)       # bagging
+library(caret)       # bagging
+```
+```{r}
+model1 <- rpart(
+   formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall,
+   data = train,
+   method = 'anova'
+)
+rpart.plot(model1)
+
+```
+
+```{r}
+plotcp(model1)
+```
+
+```{r}
+model2 <- rpart(
+    formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall,
+   data = train,
+   method = 'anova',
+    control = list(cp = 0, xval = 3)
+)
+
+plotcp(model2)
+abline(v = 5, lty = "dashed")
+
+model2$cptable
+
+```
+
+
