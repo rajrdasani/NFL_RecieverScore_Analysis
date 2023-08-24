@@ -11,12 +11,12 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(reshape2) 
-
+library(ggrepel)
 ```
 
 
 ```{r}
-data = read.csv("WR_Advanced_Stats - PivotData_Clean.csv")
+data = read.csv("../Data/WR_Advanced_Stats - PivotData_Clean.csv")
 head(data)
 ```
 
@@ -212,67 +212,17 @@ fulldata_deltas = rbind(wrscore_21_22, wrscore_20_21, wrscore_19_20, wrscore_18_
 
 Split into train/test
 ```{r}
+set.seed(502)
+
 sample <- sample(c(TRUE, FALSE), nrow(x_var), replace=TRUE, prob=c(0.8,0.2))
 train <- fulldata_deltas[sample, ]
 test <- fulldata_deltas[!sample, ]
 ```
 
 
-Subset y-variable as Year 1 (vs Year 0) OverallScore
-Subset x-variables as all Y0 data and team_change
-
-Linear Regression Model
-```{r}
-wrscore.lm <- lm(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall,
-                 data = train)
-
-print(summary(wrscore.lm))
-
-```
-
-Overall it does ok with an R**2 of 0.3441, lets talk out some of the features 
-
-```{r}
-wrscore.lm <- lm(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_Overall,
-                 data = train)
-
-print(summary(wrscore.lm))
-
-```
-Outside of the previous year's overall score, nothing else had a strong prediction for overall 
 
 
-Lets test it now, assuming we do know the stats from the year. Even if we take away the 3 subset scores, there is probably some correlation among the data.
-
-Ex. Catch Score: ""For example, if the tracking data indicates a pass will be completed 75% of the time and the receiver actually catches the pass, he is credited with plus-0.25. If he does not catch the pass, he is debited at minus-0.75."" So with this, more targets should add to overall score as a whole.
-
-
-```{r}
-catchscore.lm <- lm(formula = Y1_CatchScore ~ Y1_Yards + Y1_YardsRun + Y1_Targets + Y1_YardsPerRoute,
-                 data = train)
-
-print(summary(catchscore.lm))
-
-
-openscore.lm <- lm(formula = Y1_OpenScore ~ Y1_Yards + Y1_YardsRun + Y1_Targets + Y1_YardsPerRoute,
-                 data = train)
-
-print(summary(openscore.lm))
-
-yacscore.lm <- lm(formula = Y1_YACScore ~ Y1_Yards + Y1_YardsRun + Y1_Targets + Y1_YardsPerRoute,
-                 data = train)
-
-print(summary(yacscore.lm))
-```
-
-Specifically 
-- Yards and Targets are highly correlated to CatchScore
-- Targets and YardsPerRoute is correlated to OpenScore
-- Yards and Targets is highly correlated to YACScore
-
-
-
-Using all doesn't lead to anything clear, lets do some feature selection
+Quick feature selection
 
 Team Change Variable
 
@@ -286,7 +236,126 @@ gg <- ggplot(fulldata_deltas, aes(Y0_Overall, Y1_Overall, colour = as.factor(tea
 print(gg)
 ```
 
-If there isnt a clear correlation for all the WRs together, lets see if we can create groupings to see if there are patterns among those
+
+
+
+
+
+
+Subset y-variable as Year 1 (vs Year 0) OverallScore
+Subset x-variables as all Y0 data and team_change
+
+Linear Regression Model (only previous year numbers)
+```{r}
+wrscore.lm <- lm(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
+                 data = train)
+
+print(summary(wrscore.lm))
+
+#plot residuals
+plot(wrscore.lm$residuals, pch = 16, col = "red")
+```
+Overall it does ok with an R**2 of 0.3234. However, outside of the previous year's overall score, nothing else had a strong prediction for overall.
+
+```{r}
+#predictions
+test$linreg_Y1_Overall_prediction = predict(wrscore.lm, test)
+test$linreg_residual = abs(test$Y1_Overall - test$linreg_Y1_Overall_prediction)
+test[,c('Player','Y0_Overall', 'Y1_Overall','linreg_Y1_Overall_prediction','linreg_residual')]
+
+#Plot Test Data
+ggplot(test, aes(Y1_Overall, linreg_Y1_Overall_prediction, label = Player)) +
+  geom_point() + 
+  geom_text_repel(aes(label=ifelse(linreg_residual>15,as.character(Player),''))) +
+  geom_abline(slope=1, intercept = 0, color = 'black') +
+  geom_text(aes(50, 90, label = "Actual Score Worse than Predicted Score",), color = 'red') +
+  geom_text(aes(80, 30, label = "Actual Score Better than Predicted Score"), color = 'lightgreen') +
+  labs(title = "Player Year 1 (2nd of 2 Consec. Years) WR Score vs Linear Regression Year 1 WR Score Prediction",
+         subtitle = "Only Test Data graphed, Players labeled have incorrect predictions of 15+",
+         x = "Actual Year 1 WR Score", 
+         y = "Predicted Year 1 WR Score") +
+  theme_minimal() +
+    xlim(20,100) +
+    ylim(20, 100)
+
+ggsave("../Images/LinearRegression_Year1Predictions.png", bg="white")
+```
+Lin Reg RMSE
+```{r}
+sqrt(mean(test$linreg_residual ** 2))
+```
+
+
+
+```{r}
+
+#Plot Test Data
+ggplot(test, aes(overall_delta, linreg_residual, label = Player)) +
+  geom_point()
+  #geom_text_repel(aes(label=ifelse(linreg_residual>15,as.character(Player),''))) +
+  #geom_abline(slope=1, intercept = 0, color = 'black') +
+  #geom_text(aes(50, 90, label = "Actual Score Worse than Predicted Score",), color = 'red') +
+  #geom_text(aes(80, 30, label = "Actual Score Better than Predicted Score"), color = 'lightgreen') +
+  #labs(title = "Player Year 1 (2nd of 2 Consec. Years) WR Score vs Linear Regression Year 1 WR Score Prediction",
+  #       subtitle = "Only Test Data graphed, Players labeled have incorrect predictions of 15+",
+  #       x = "Actual Year 1 WR Score", 
+  #       y = "Predicted Year 1 WR Score") +
+  #theme_minimal() +
+  #  xlim(20,100) +
+  #  ylim(20, 100)
+```
+
+
+Test data shoes it does generally well predicting scores, especially at the lower end. Typically higher scores are not predicted well, especially if they had a significant increase from the previous year
+
+
+
+Given that, lets see if we give the model all of their scores between 2017-2021 to see if it can predict 2022.
+
+```{r}
+data_overalls = data[, c("Player", "X2017_Overall", "X2018_Overall", "X2019_Overall", "X2020_Overall", "X2021_Overall", "X2022_Overall")]
+data_overalls_19_22 = data_overalls %>%
+  filter_at(vars(X2019_Overall, X2020_Overall, X2021_Overall, X2022_Overall),all_vars(!is.na(.)))
+
+sample <- sample(c(TRUE, FALSE), nrow(data_overalls_19_22), replace=TRUE, prob=c(0.8,0.2))
+train_overalls <- data_overalls_19_22[sample, ]
+test_overalls <- data_overalls_19_22[!sample, ]
+
+wrscore_overalls.lm <- lm(formula = X2022_Overall ~ X2019_Overall + X2020_Overall + X2021_Overall,
+                 data = data_overalls_19_22)
+
+print(summary(wrscore_overalls.lm))
+
+
+#plot residuals
+plot(wrscore_overalls.lm$residuals, pch = 16, col = "red")
+```
+
+```{r}
+#predictions
+test_overalls$linreg_X2022_Overall_prediction = predict(wrscore_overalls.lm, test_overalls)
+test_overalls$linreg_residual = abs(test_overalls$X2022_Overall - test_overalls$linreg_X2022_Overall_prediction)
+test_overalls[,c('Player', 'X2022_Overall','linreg_X2022_Overall_prediction','linreg_residual')]
+
+#Plot Test Data
+ggplot(test_overalls, aes(X2022_Overall, linreg_X2022_Overall_prediction, label = Player)) +
+  geom_point() + 
+  geom_text_repel(aes(label=ifelse(linreg_residual>15,as.character(Player),''))) +
+  geom_abline(slope=1, intercept = 0, color = 'black') +
+  geom_text(aes(50, 90, label = "Actual Score Worse than Predicted Score",), color = 'red') +
+  geom_text(aes(80, 30, label = "Actual Score Better than Predicted Score"), color = 'lightgreen') +
+  labs(title = "2022 Predicted Linear Regression WR Score vs Actual 2022 WR Score Prediction",
+         subtitle = "Only Test Data graphed, Players labeled have incorrect predictions of 15+",
+         x = "Actual 2022 WR Score", 
+         y = "Predicted 2022 WR Score") +
+  theme_minimal() +
+    xlim(20,100) +
+    ylim(20, 100)
+
+ggsave("../Images/LinearRegression_2022Predictions.png", bg="white")
+```
+
+Consistently, players at the top have their actual score better than their predicted score, suggesting that our linear model might be best when does in groups.
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -302,7 +371,7 @@ tree_spec <- decision_tree() %>%
 
 # Fit the model to the training data
 tree_fit <- tree_spec %>%
- fit(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall,
+ fit(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
                  data = train)
 
 # Make predictions on the testing data
@@ -311,14 +380,14 @@ predictions <- tree_fit %>%
  pull(.pred)
 
 # Calculate RMSE and R-squared
-metrics <- metric_set(rmse, rsq)
+# metrics <- metric_set(rmse, rsq)
 model_performance <- test %>%
  mutate(predictions = predictions) %>%
  metrics(truth = Y1_Overall, estimate = predictions)
 
 print(model_performance)
 ```
-Even though it isnt great (a good amount worse than the linear regression model, lets see how it visualizes)
+A good amount worse than the linear regression model (this: 0.19, linear regression 0.33), lets see how it visualizes
 
 ```{r}
 # Load the library
@@ -336,7 +405,7 @@ tree_spec <- decision_tree() %>%
 
 # Fit the model to the training data
 tree_fit <- tree_spec %>%
- fit(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute,
+ fit(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + team_change,
                  data = train)
 
 # Make predictions on the testing data
@@ -345,7 +414,7 @@ predictions <- tree_fit %>%
  pull(.pred)
 
 # Calculate RMSE and R-squared
-metrics <- metric_set(rmse, rsq)
+# metrics <- metric_set(rmse, rsq)
 model_performance <- test %>%
  mutate(predictions = predictions) %>%
  metrics(truth = Y1_Overall, estimate = predictions)
@@ -354,16 +423,75 @@ print(model_performance)
 
 
 # Plot the decision tree
-rpart.plot(tree_fit$fit, type = 5, extra = 101, under = TRUE, cex = 0.8, box.palette = "auto")
+rpart.plot(tree_fit$fit, type = 5, extra = 101, under = TRUE, cex = 0.8, box.palette = "auto", roundint=FALSE)
+```
+We get to 0.22, which is better than the initial model, but still worse than the linear regression.
+
+the model generally tells us that yards gained and yards per route are pretty big indicators for a reciever's overall score.
+
+But with one train/test split, we are overfitting. Lets try using a random forest
+
+
+```{r}
+library(randomForest)
+library(caret)
+
+rf <- randomForest(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
+                 data = train) 
+
+print(rf)
 ```
 
-Even though the model treats output as ints / categories rather than continuous, the model generally tells us that yards gained and yards per route are pretty big indicators for a reciever's overall score.
+```{r}
+p2 <- predict(rf, test)
+plot(rf)
 
 
+test$rf_preds = p2
+test$rf_error = abs(test$Y1_Overall - test$rf_preds)
+
+#rmse
+sqrt(mean(test$rf_error ** 2))
+```
+
+A lower RMSE than just the decision tree on its own. Lets see how the predictions do overall
+
+
+```{r}
+ggplot(test, aes(Y1_Overall, rf_preds)) + 
+  geom_point() +
+  geom_text_repel(aes(label=ifelse(rf_error>15,as.character(Player),''))) +
+  geom_abline(slope=1, intercept = 0, color = 'black') +
+  geom_text(aes(50, 90, label = "Actual Score Worse than Predicted Score",), color = 'red') +
+  geom_text(aes(80, 30, label = "Actual Score Better than Predicted Score"), color = 'lightgreen') +
+  labs(title = "2022 Actual WR Score vs Random Forest 2022 WR Score Prediction",
+         subtitle = "Only Test Data graphed, Players labeled have incorrect predictions of 15+",
+         x = "Actual WR Score", 
+         y = "RF Predicted WR Score") +
+  theme_minimal() +
+    xlim(20,100) +
+    ylim(20, 100)
+
+ggsave("../Images/RandomForest_Y1Predictions.png", bg="white")
+
+```
+
+Similar errors and names as we saw before, but now we see a third TE join the greater than 15 error group, showing the volatility of TEs.
+
+```{r}
+ggplot(test, aes(Y1_Overall, rf_error)) + 
+  geom_point()
+```
+
+But the key common trend we see is that the model can predict the middle recievers well (even big drop-offs like Jakobi Meyers 20-21 falling from 88 to 66). But overall, the model regresses most players to the mean, even if super high (Michael Thomas 18-19 went from 96 to 94 but model predicted 74 to 70).
+
+
+However, the model trees treats output as ints / categories rather than continuous, making this pretty useless, so lets use decision trees that 
+a) predict in groups
+b) can predict as continuous rather than as integers 
 
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
 
 
 Now we'll use Regression Trees to create regressions for individual groups 
@@ -376,9 +504,10 @@ library(rpart.plot)  # plotting regression trees
 library(ipred)       # bagging
 library(caret)       # bagging
 ```
+
 ```{r}
 model1 <- rpart(
-   formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall,
+   formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
    data = train,
    method = 'anova'
 )
@@ -390,19 +519,213 @@ rpart.plot(model1)
 plotcp(model1)
 ```
 
+An ever increasing cp, indicating with more trees come with more losses. Lets build out a full tree to see if it still exists
+
 ```{r}
 model2 <- rpart(
-    formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall,
+    formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
    data = train,
    method = 'anova',
-    control = list(cp = 0, xval = 3)
+    control = list(cp = 0, xval = 50)
 )
 
 plotcp(model2)
 abline(v = 5, lty = "dashed")
 
+
 model2$cptable
 
 ```
+
+5 splits seems to be ideal, so we will keep it to that.
+
+Now lets tune minsplit and maxdepth
+Full code credit here to https://uc-r.github.io/regression_trees
+
+```{r}
+##grid search to find best combination
+
+hyper_grid <- expand.grid(
+  minsplit = seq(3, 20, 1),
+  maxdepth = seq(3, 15, 1)
+)
+
+models <- list()
+
+for (i in 1:nrow(hyper_grid)) {
+  
+  # get minsplit, maxdepth values at row i
+  minsplit <- hyper_grid$minsplit[i]
+  maxdepth <- hyper_grid$maxdepth[i]
+
+  # train a model and store in the list
+  models[[i]] <- rpart(
+    formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore +
+      Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
+   data = train,
+   method = 'anova',
+    control = list(minsplit = minsplit, maxdepth = maxdepth)
+    )
+}
+
+# function to get optimal cp
+get_cp <- function(x) {
+  min    <- which.min(x$cptable[, "xerror"])
+  cp <- x$cptable[min, "CP"] 
+}
+
+# function to get minimum error
+get_min_error <- function(x) {
+  min    <- which.min(x$cptable[, "xerror"])
+  xerror <- x$cptable[min, "xerror"] 
+}
+
+hyper_grid %>%
+  mutate(
+    cp    = purrr::map_dbl(models, get_cp),
+    error = purrr::map_dbl(models, get_min_error)
+    ) %>%
+  arrange(error) %>%
+  top_n(-5, wt = error)
+```
+
+```{r}
+optimal_tree <- rpart(
+    formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore +
+      Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
+   data = train,
+   method = 'anova',
+   control = list(minsplit = 5, maxdepth = 6, cp = 0.01688919)
+   )
+
+pred <- predict(optimal_tree, newdata = test)
+test$regtree_preds = pred
+test$regtree_error = abs(test$Y1_Overall - test$regtree_preds)
+RMSE(pred = pred, obs = test$Y1_Overall)
+```
+
+RMSE still high, pretty close to both the linear regression and simple random forest. Lets see if it has the same problems as them with grouping.
+
+```{r}
+test[, c('Player', 'Y0_Overall', 'Y1_Overall', 'linreg_Y1_Overall_prediction', 'rf_preds', 'regtree_preds', 'regtree_error')]
+
+
+ggplot(test, aes(Y1_Overall, regtree_preds)) + 
+  geom_point() +
+  geom_text_repel(aes(label=ifelse(regtree_preds>20,as.character(Player),''))) +
+  geom_abline(slope=1, intercept = 0, color = 'black') +
+  geom_text(aes(50, 90, label = "Actual Score Worse than Predicted Score",), color = 'red') +
+  geom_text(aes(80, 30, label = "Actual Score Better than Predicted Score"), color = 'lightgreen') +
+  labs(title = "2022 Actual WR Score vs Regression Tree 2022 WR Score Prediction",
+         subtitle = "Only Test Data graphed, Players labeled have incorrect predictions of 15+",
+         x = "Actual WR Score", 
+         y = "RegTree Predicted WR Score") +
+  theme_minimal() +
+    xlim(20,100) +
+    ylim(20, 100)
+
+ggsave("../Images/RegressionTree_Y1Predictions.png", bg="white")
+
+```
+Does a better job with some of the worse outliers, but still not able to detect breakouts.
+
+
+Lets do some bagging to split the dataset and try to remove the high variance we are seeing
+
+Bagging with ipred
+```{r}
+set.seed(502)
+
+bagged_m1 <- bagging(
+  formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore +
+      Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
+   data = train,
+  coob = TRUE
+  )
+
+bagged_m1
+```
+
+Find number of trees we want to create
+```{r}
+# assess 10-50 bagged trees
+ntree <- 10:100
+
+# create empty vector to store OOB RMSE values
+rmse_vals <- vector(mode = "numeric", length = length(ntree))
+
+for (i in seq_along(ntree)) {
+  # reproducibility
+  set.seed(502)
+  
+  # perform bagged model
+  model <- bagging(
+  formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore +
+      Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
+   data = train,
+  coob = TRUE,
+  nbagg   = ntree[i]
+)
+  # get OOB error
+  rmse_vals[i] <- model$err
+}
+
+plot(ntree, rmse_vals, type = 'l', lwd = 2)
+abline(v = 52, col = "red", lty = "dashed")
+
+```
+
+Bagging with caret
+```{r}
+# Specify 10-fold cross validation
+ctrl <- trainControl(method = "cv",  number = 10) 
+
+# CV bagged model
+bagged_cv <- train(
+ form = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore +
+      Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
+   data = train,
+  method = "treebag",
+  trControl = ctrl,
+  importance = TRUE
+  )
+
+# assess results
+bagged_cv
+
+plot(varImp(bagged_cv), 8)
+```
+
+```{r}
+pred <- predict(bagged_cv, test)
+test$baggedtree_preds = pred
+test$baggedtree_error = abs(test$Y1_Overall - test$baggedtree_preds)
+RMSE(pred, test$Y1_Overall)
+```
+
+Ok but still worse than linear regression
+
+
+```{r}
+ggplot(test, aes(Y1_Overall, baggedtree_preds)) + 
+  geom_point() +
+  geom_text_repel(aes(label=ifelse(baggedtree_error>15,as.character(Player),''))) +
+  geom_abline(slope=1, intercept = 0, color = 'black') +
+  geom_text(aes(50, 90, label = "Actual Score Worse than Predicted Score",), color = 'red') +
+  geom_text(aes(80, 30, label = "Actual Score Better than Predicted Score"), color = 'lightgreen') +
+  labs(title = "2022 Predicted Bagged Tree WR Score vs Actual 2022 WR Score Prediction",
+         subtitle = "Only Test Data graphed, Players labeled have incorrect predictions of 15+",
+         x = "Actual WR Score", 
+         y = "Bagged Tree Predicted WR Score") +
+  theme_minimal() +
+    xlim(20,100) +
+    ylim(20, 100)
+```
+
+Got better at the middle predictions, worse at the outer predictions.
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 
 

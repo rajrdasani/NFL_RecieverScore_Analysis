@@ -1,0 +1,303 @@
+---
+title: "IndvScorePredictionModel"
+output: html_document
+date: "2023-08-21"
+---
+
+
+---------
+
+After seeing that the individual models together were even worse to predict than the overall score as a whole, leaving this to the side for now.
+
+---------
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(reshape2) 
+```
+
+After all the testing in the WRScorePredictionModel.Rmd, we got somewhere but nowhere definitive. We know the overall score is calculated into 3 components, so lets try creating 3 individual models giving the data we have and the variables we know work, and then predicting the aggregate of the 3 scores as they presented in the ESPN article
+
+For wide receivers and tight ends, Open Score accounts for roughly half of the overall score, while Catch Score accounts for a little over a quarter and YAC Score accounts for the remainder. 
+
+We will translate this to:
+
+Open Score: 50%
+Catch Score: 30%
+YAC Score: 20%
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Data Loading and Cleaning from WRScorePredictionModel.Rmd, redone.
+
+```{r}
+data = read.csv("../Data/WR_Advanced_Stats - PivotData_Clean.csv")
+head(data)
+```
+Create table that has player column for a single year, with the deltas of the previous year
+Yards columns loaded in as character, so change them 
+```{r}
+data = data %>%
+  mutate_at(c('X2017_Yards', 'X2018_Yards', 'X2019_Yards', 'X2020_Yards', 'X2021_Yards', 'X2022_Yards'), readr::parse_number)
+```
+
+```{r}
+wrscore_21_22 = data %>%
+  select(Player, 
+         X2021_Team, X2021_Yards, X2021_YardsRun, X2021_Targets, X2021_YardsPerRoute, X2021_OpenScore, X2021_CatchScore, X2021_YACScore, X2021_Overall,
+         X2022_Team, X2022_Yards, X2022_YardsRun, X2022_Targets, X2022_YardsPerRoute, X2022_OpenScore, X2022_CatchScore, X2022_YACScore, X2022_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2021_Team == X2022_Team), 
+    yards_delta = X2022_Yards - X2021_Yards, 
+    yardsrun_delta = X2022_YardsRun - X2021_YardsRun,
+    targets_delta = X2022_Targets - X2021_Targets,
+    yardsperroute_delta = X2022_YardsPerRoute - X2021_YardsPerRoute,
+    openscore_delta = X2022_OpenScore - X2021_OpenScore,
+    catchscore_delta = X2022_CatchScore - X2021_CatchScore,
+    yacscore_delta = X2022_YACScore - X2021_YACScore,
+    overall_delta = X2022_Overall - X2021_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "21-22")) %>%
+  rename(Y0_Yards = X2021_Yards,
+         Y1_Yards = X2022_Yards,
+         Y0_YardsRun = X2021_YardsRun,
+         Y1_YardsRun = X2022_YardsRun,
+         Y0_Targets = X2021_Targets,
+         Y1_Targets = X2022_Targets,
+         Y0_YardsPerRoute = X2021_YardsPerRoute,
+         Y1_YardsPerRoute = X2022_YardsPerRoute,
+         Y0_CatchScore = X2021_CatchScore,
+         Y1_CatchScore = X2022_CatchScore,
+         Y0_OpenScore = X2021_OpenScore,
+         Y1_OpenScore = X2022_OpenScore,
+         Y0_YACScore = X2021_YACScore,
+         Y1_YACScore = X2022_YACScore,
+         Y0_Overall = X2021_Overall,
+         Y1_Overall = X2022_Overall) %>%
+  select(-X2021_Team, -X2022_Team)
+   
+
+wrscore_20_21 = data %>%
+  select(Player, 
+         X2021_Team, X2021_Yards, X2021_YardsRun, X2021_Targets, X2021_YardsPerRoute, X2021_OpenScore, X2021_CatchScore, X2021_YACScore, X2021_Overall,
+         X2020_Team, X2020_Yards, X2020_YardsRun, X2020_Targets, X2020_YardsPerRoute, X2020_OpenScore, X2020_CatchScore, X2020_YACScore, X2020_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2021_Team == X2020_Team), 
+    yards_delta = X2021_Yards - X2020_Yards, 
+    yardsrun_delta = X2021_YardsRun - X2020_YardsRun,
+    targets_delta = X2021_Targets - X2020_Targets,
+    yardsperroute_delta = X2021_YardsPerRoute - X2020_YardsPerRoute,
+    openscore_delta = X2021_OpenScore - X2020_OpenScore,
+    catchscore_delta = X2021_CatchScore - X2020_CatchScore,
+    yacscore_delta = X2021_YACScore - X2020_YACScore,
+    overall_delta = X2021_Overall - X2020_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "20-21")) %>%
+  rename(Y0_Yards = X2020_Yards,
+         Y1_Yards = X2021_Yards,
+         Y0_YardsRun = X2020_YardsRun,
+         Y1_YardsRun = X2021_YardsRun,
+         Y0_Targets = X2020_Targets,
+         Y1_Targets = X2021_Targets,
+         Y0_YardsPerRoute = X2020_YardsPerRoute,
+         Y1_YardsPerRoute = X2021_YardsPerRoute,
+         Y0_CatchScore = X2020_CatchScore,
+         Y1_CatchScore = X2021_CatchScore,
+         Y0_OpenScore = X2020_OpenScore,
+         Y1_OpenScore = X2021_OpenScore,
+         Y0_YACScore = X2020_YACScore,
+         Y1_YACScore = X2021_YACScore,
+         Y0_Overall = X2020_Overall,
+         Y1_Overall = X2021_Overall) %>%
+  select(-X2021_Team, -X2020_Team)
+
+wrscore_19_20 = data %>%
+  select(Player, 
+         X2019_Team, X2019_Yards, X2019_YardsRun, X2019_Targets, X2019_YardsPerRoute, X2019_OpenScore, X2019_CatchScore, X2019_YACScore, X2019_Overall,
+         X2020_Team, X2020_Yards, X2020_YardsRun, X2020_Targets, X2020_YardsPerRoute, X2020_OpenScore, X2020_CatchScore, X2020_YACScore, X2020_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2019_Team == X2020_Team), 
+    yards_delta = X2020_Yards - X2019_Yards, 
+    yardsrun_delta = X2020_YardsRun - X2019_YardsRun,
+    targets_delta = X2020_Targets - X2019_Targets,
+    yardsperroute_delta = X2020_YardsPerRoute - X2019_YardsPerRoute,
+    openscore_delta = X2020_OpenScore - X2019_OpenScore,
+    catchscore_delta = X2020_CatchScore - X2019_CatchScore,
+    yacscore_delta = X2020_YACScore - X2019_YACScore,
+    overall_delta = X2020_Overall - X2019_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "19-20")) %>%
+  rename(Y0_Yards = X2019_Yards,
+         Y1_Yards = X2020_Yards,
+         Y0_YardsRun = X2019_YardsRun,
+         Y1_YardsRun = X2020_YardsRun,
+         Y0_Targets = X2019_Targets,
+         Y1_Targets = X2020_Targets,
+         Y0_YardsPerRoute = X2019_YardsPerRoute,
+         Y1_YardsPerRoute = X2020_YardsPerRoute,
+         Y0_CatchScore = X2019_CatchScore,
+         Y1_CatchScore = X2020_CatchScore,
+         Y0_OpenScore = X2019_OpenScore,
+         Y1_OpenScore = X2020_OpenScore,
+         Y0_YACScore = X2019_YACScore,
+         Y1_YACScore = X2020_YACScore,
+         Y0_Overall = X2019_Overall,
+         Y1_Overall = X2020_Overall) %>%
+  select(-X2019_Team, -X2020_Team)
+
+wrscore_18_19 = data %>%
+  select(Player, 
+         X2019_Team, X2019_Yards, X2019_YardsRun, X2019_Targets, X2019_YardsPerRoute, X2019_OpenScore, X2019_CatchScore, X2019_YACScore, X2019_Overall,
+         X2018_Team, X2018_Yards, X2018_YardsRun, X2018_Targets, X2018_YardsPerRoute, X2018_OpenScore, X2018_CatchScore, X2018_YACScore, X2018_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2019_Team == X2018_Team), 
+    yards_delta = X2019_Yards - X2018_Yards, 
+    yardsrun_delta = X2019_YardsRun - X2018_YardsRun,
+    targets_delta = X2019_Targets - X2018_Targets,
+    yardsperroute_delta = X2019_YardsPerRoute - X2018_YardsPerRoute,
+    openscore_delta = X2019_OpenScore - X2018_OpenScore,
+    catchscore_delta = X2019_CatchScore - X2018_CatchScore,
+    yacscore_delta = X2019_YACScore - X2018_YACScore,
+    overall_delta = X2019_Overall - X2018_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "18-19")) %>%
+  rename(Y0_Yards = X2018_Yards,
+         Y1_Yards = X2019_Yards,
+         Y0_YardsRun = X2018_YardsRun,
+         Y1_YardsRun = X2019_YardsRun,
+         Y0_Targets = X2018_Targets,
+         Y1_Targets = X2019_Targets,
+         Y0_YardsPerRoute = X2018_YardsPerRoute,
+         Y1_YardsPerRoute = X2019_YardsPerRoute,
+         Y0_CatchScore = X2018_CatchScore,
+         Y1_CatchScore = X2019_CatchScore,
+         Y0_OpenScore = X2018_OpenScore,
+         Y1_OpenScore = X2019_OpenScore,
+         Y0_YACScore = X2018_YACScore,
+         Y1_YACScore = X2019_YACScore,
+         Y0_Overall = X2018_Overall,
+         Y1_Overall = X2019_Overall) %>%
+  select(-X2019_Team, -X2018_Team)
+
+wrscore_17_18 = data %>%
+  select(Player, 
+         X2017_Team, X2017_Yards, X2017_YardsRun, X2017_Targets, X2017_YardsPerRoute, X2017_OpenScore, X2017_CatchScore, X2017_YACScore, X2017_Overall,
+         X2018_Team, X2018_Yards, X2018_YardsRun, X2018_Targets, X2018_YardsPerRoute, X2018_OpenScore, X2018_CatchScore, X2018_YACScore, X2018_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2017_Team == X2018_Team), 
+    yards_delta = X2018_Yards - X2017_Yards, 
+    yardsrun_delta = X2018_YardsRun - X2017_YardsRun,
+    targets_delta = X2018_Targets - X2017_Targets,
+    yardsperroute_delta = X2018_YardsPerRoute - X2017_YardsPerRoute,
+    openscore_delta = X2018_OpenScore - X2017_OpenScore,
+    catchscore_delta = X2018_CatchScore - X2017_CatchScore,
+    yacscore_delta = X2018_YACScore - X2017_YACScore,
+    overall_delta = X2018_Overall - X2017_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "17-18")) %>%
+  rename(Y0_Yards = X2017_Yards,
+         Y1_Yards = X2018_Yards,
+         Y0_YardsRun = X2017_YardsRun,
+         Y1_YardsRun = X2018_YardsRun,
+         Y0_Targets = X2017_Targets,
+         Y1_Targets = X2018_Targets,
+         Y0_YardsPerRoute = X2017_YardsPerRoute,
+         Y1_YardsPerRoute = X2018_YardsPerRoute,
+         Y0_CatchScore = X2017_CatchScore,
+         Y1_CatchScore = X2018_CatchScore,
+         Y0_OpenScore = X2017_OpenScore,
+         Y1_OpenScore = X2018_OpenScore,
+         Y0_YACScore = X2017_YACScore,
+         Y1_YACScore = X2018_YACScore,
+         Y0_Overall = X2017_Overall,
+         Y1_Overall = X2018_Overall) %>%
+  select(-X2017_Team, -X2018_Team)
+
+
+
+fulldata_deltas = rbind(wrscore_21_22, wrscore_20_21, wrscore_19_20, wrscore_18_19, wrscore_17_18)
+```
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Start with creating individual linear regressions for each 
+
+```{r}
+catchscore.lm <- lm(formula = Y1_CatchScore ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + team_change + Y0_CatchScore,
+                 data = train)
+
+print(summary(catchscore.lm))
+
+
+openscore.lm <- lm(formula = Y1_OpenScore ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_OpenScore + team_change,
+                 data = train)
+
+print(summary(openscore.lm))
+
+yacscore.lm <- lm(formula = Y1_YACScore ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_YACScore + team_change,
+                 data = train)
+
+print(summary(yacscore.lm))
+```
+
+With all highly correlated to their previous score, the one key detail we can take from this is that they all stay consistent, specifically OpenScore, or at least are easily predicted in mass. CatchScore is the lowest, which makes sense given how most of catchscore is dependent on situation of commpletion likelihood (QB throw, number of defenders).
+
+
+
+
+What if we just looked at a single year to see if which box score stats contribute to these numbers in a given year
+
+
+```{r}
+catchscore.lm <- lm(formula = Y0_CatchScore ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + team_change + Y0_CatchScore,
+                 data = train)
+
+print(summary(catchscore.lm))
+
+
+openscore.lm <- lm(formula = Y0_OpenScore ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_OpenScore + team_change,
+                 data = train)
+
+print(summary(openscore.lm))
+
+yacscore.lm <- lm(formula = Y0_YACScore ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_YACScore + team_change,
+                 data = train)
+
+print(summary(yacscore.lm))
+```
+
+Specifically 
+- Yards and Targets are highly correlated to CatchScore
+- Targets and YardsPerRoute is correlated to OpenScore
+- Yards and Targets and Team Change is highly correlated to YACScore
+
+So now, lets create models with just the above variables, and add their predictions to see how close we can get.
+
+```{r}
+catchscore.lm <- lm(formula = Y1_CatchScore ~ Y0_Yards + Y0_Targets,
+                 data = train)
+
+print(summary(catchscore.lm))
+
+
+openscore.lm <- lm(formula = Y1_OpenScore ~ Y0_Targets + Y0_YardsPerRoute,
+                 data = train)
+
+print(summary(openscore.lm))
+
+yacscore.lm <- lm(formula = Y0_YACScore ~ Y0_Yards + Y0_Targets + team_change,
+                 data = train)
+
+print(summary(yacscore.lm))
+```
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+

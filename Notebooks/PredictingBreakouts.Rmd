@@ -1,0 +1,461 @@
+---
+title: "PredictingBreakouts"
+output: html_document
+date: "2023-08-22"
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(reshape2) 
+```
+
+We've noticed that the model does particularly bad at predicting breakouts - players who's score jumped by more than 5-10 points. Lets see if we can pull any from those in the past and see where we get to
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Data Loading and Cleaning from WRScorePredictionModel.Rmd, redone.
+
+```{r}
+data = read.csv("../Data/WR_Advanced_Stats - PivotData_Clean.csv")
+head(data)
+```
+Create table that has player column for a single year, with the deltas of the previous year
+Yards columns loaded in as character, so change them 
+```{r}
+data = data %>%
+  mutate_at(c('X2017_Yards', 'X2018_Yards', 'X2019_Yards', 'X2020_Yards', 'X2021_Yards', 'X2022_Yards'), readr::parse_number)
+```
+
+```{r}
+wrscore_21_22 = data %>%
+  select(Player, 
+         X2021_Team, X2021_Yards, X2021_YardsRun, X2021_Targets, X2021_YardsPerRoute, X2021_OpenScore, X2021_CatchScore, X2021_YACScore, X2021_Overall,
+         X2022_Team, X2022_Yards, X2022_YardsRun, X2022_Targets, X2022_YardsPerRoute, X2022_OpenScore, X2022_CatchScore, X2022_YACScore, X2022_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2021_Team == X2022_Team), 
+    yards_delta = X2022_Yards - X2021_Yards, 
+    yardsrun_delta = X2022_YardsRun - X2021_YardsRun,
+    targets_delta = X2022_Targets - X2021_Targets,
+    yardsperroute_delta = X2022_YardsPerRoute - X2021_YardsPerRoute,
+    openscore_delta = X2022_OpenScore - X2021_OpenScore,
+    catchscore_delta = X2022_CatchScore - X2021_CatchScore,
+    yacscore_delta = X2022_YACScore - X2021_YACScore,
+    overall_delta = X2022_Overall - X2021_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "21-22")) %>%
+  rename(Y0_Yards = X2021_Yards,
+         Y1_Yards = X2022_Yards,
+         Y0_YardsRun = X2021_YardsRun,
+         Y1_YardsRun = X2022_YardsRun,
+         Y0_Targets = X2021_Targets,
+         Y1_Targets = X2022_Targets,
+         Y0_YardsPerRoute = X2021_YardsPerRoute,
+         Y1_YardsPerRoute = X2022_YardsPerRoute,
+         Y0_CatchScore = X2021_CatchScore,
+         Y1_CatchScore = X2022_CatchScore,
+         Y0_OpenScore = X2021_OpenScore,
+         Y1_OpenScore = X2022_OpenScore,
+         Y0_YACScore = X2021_YACScore,
+         Y1_YACScore = X2022_YACScore,
+         Y0_Overall = X2021_Overall,
+         Y1_Overall = X2022_Overall) %>%
+  select(-X2021_Team, -X2022_Team)
+   
+
+wrscore_20_21 = data %>%
+  select(Player, 
+         X2021_Team, X2021_Yards, X2021_YardsRun, X2021_Targets, X2021_YardsPerRoute, X2021_OpenScore, X2021_CatchScore, X2021_YACScore, X2021_Overall,
+         X2020_Team, X2020_Yards, X2020_YardsRun, X2020_Targets, X2020_YardsPerRoute, X2020_OpenScore, X2020_CatchScore, X2020_YACScore, X2020_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2021_Team == X2020_Team), 
+    yards_delta = X2021_Yards - X2020_Yards, 
+    yardsrun_delta = X2021_YardsRun - X2020_YardsRun,
+    targets_delta = X2021_Targets - X2020_Targets,
+    yardsperroute_delta = X2021_YardsPerRoute - X2020_YardsPerRoute,
+    openscore_delta = X2021_OpenScore - X2020_OpenScore,
+    catchscore_delta = X2021_CatchScore - X2020_CatchScore,
+    yacscore_delta = X2021_YACScore - X2020_YACScore,
+    overall_delta = X2021_Overall - X2020_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "20-21")) %>%
+  rename(Y0_Yards = X2020_Yards,
+         Y1_Yards = X2021_Yards,
+         Y0_YardsRun = X2020_YardsRun,
+         Y1_YardsRun = X2021_YardsRun,
+         Y0_Targets = X2020_Targets,
+         Y1_Targets = X2021_Targets,
+         Y0_YardsPerRoute = X2020_YardsPerRoute,
+         Y1_YardsPerRoute = X2021_YardsPerRoute,
+         Y0_CatchScore = X2020_CatchScore,
+         Y1_CatchScore = X2021_CatchScore,
+         Y0_OpenScore = X2020_OpenScore,
+         Y1_OpenScore = X2021_OpenScore,
+         Y0_YACScore = X2020_YACScore,
+         Y1_YACScore = X2021_YACScore,
+         Y0_Overall = X2020_Overall,
+         Y1_Overall = X2021_Overall) %>%
+  select(-X2021_Team, -X2020_Team)
+
+wrscore_19_20 = data %>%
+  select(Player, 
+         X2019_Team, X2019_Yards, X2019_YardsRun, X2019_Targets, X2019_YardsPerRoute, X2019_OpenScore, X2019_CatchScore, X2019_YACScore, X2019_Overall,
+         X2020_Team, X2020_Yards, X2020_YardsRun, X2020_Targets, X2020_YardsPerRoute, X2020_OpenScore, X2020_CatchScore, X2020_YACScore, X2020_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2019_Team == X2020_Team), 
+    yards_delta = X2020_Yards - X2019_Yards, 
+    yardsrun_delta = X2020_YardsRun - X2019_YardsRun,
+    targets_delta = X2020_Targets - X2019_Targets,
+    yardsperroute_delta = X2020_YardsPerRoute - X2019_YardsPerRoute,
+    openscore_delta = X2020_OpenScore - X2019_OpenScore,
+    catchscore_delta = X2020_CatchScore - X2019_CatchScore,
+    yacscore_delta = X2020_YACScore - X2019_YACScore,
+    overall_delta = X2020_Overall - X2019_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "19-20")) %>%
+  rename(Y0_Yards = X2019_Yards,
+         Y1_Yards = X2020_Yards,
+         Y0_YardsRun = X2019_YardsRun,
+         Y1_YardsRun = X2020_YardsRun,
+         Y0_Targets = X2019_Targets,
+         Y1_Targets = X2020_Targets,
+         Y0_YardsPerRoute = X2019_YardsPerRoute,
+         Y1_YardsPerRoute = X2020_YardsPerRoute,
+         Y0_CatchScore = X2019_CatchScore,
+         Y1_CatchScore = X2020_CatchScore,
+         Y0_OpenScore = X2019_OpenScore,
+         Y1_OpenScore = X2020_OpenScore,
+         Y0_YACScore = X2019_YACScore,
+         Y1_YACScore = X2020_YACScore,
+         Y0_Overall = X2019_Overall,
+         Y1_Overall = X2020_Overall) %>%
+  select(-X2019_Team, -X2020_Team)
+
+wrscore_18_19 = data %>%
+  select(Player, 
+         X2019_Team, X2019_Yards, X2019_YardsRun, X2019_Targets, X2019_YardsPerRoute, X2019_OpenScore, X2019_CatchScore, X2019_YACScore, X2019_Overall,
+         X2018_Team, X2018_Yards, X2018_YardsRun, X2018_Targets, X2018_YardsPerRoute, X2018_OpenScore, X2018_CatchScore, X2018_YACScore, X2018_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2019_Team == X2018_Team), 
+    yards_delta = X2019_Yards - X2018_Yards, 
+    yardsrun_delta = X2019_YardsRun - X2018_YardsRun,
+    targets_delta = X2019_Targets - X2018_Targets,
+    yardsperroute_delta = X2019_YardsPerRoute - X2018_YardsPerRoute,
+    openscore_delta = X2019_OpenScore - X2018_OpenScore,
+    catchscore_delta = X2019_CatchScore - X2018_CatchScore,
+    yacscore_delta = X2019_YACScore - X2018_YACScore,
+    overall_delta = X2019_Overall - X2018_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "18-19")) %>%
+  rename(Y0_Yards = X2018_Yards,
+         Y1_Yards = X2019_Yards,
+         Y0_YardsRun = X2018_YardsRun,
+         Y1_YardsRun = X2019_YardsRun,
+         Y0_Targets = X2018_Targets,
+         Y1_Targets = X2019_Targets,
+         Y0_YardsPerRoute = X2018_YardsPerRoute,
+         Y1_YardsPerRoute = X2019_YardsPerRoute,
+         Y0_CatchScore = X2018_CatchScore,
+         Y1_CatchScore = X2019_CatchScore,
+         Y0_OpenScore = X2018_OpenScore,
+         Y1_OpenScore = X2019_OpenScore,
+         Y0_YACScore = X2018_YACScore,
+         Y1_YACScore = X2019_YACScore,
+         Y0_Overall = X2018_Overall,
+         Y1_Overall = X2019_Overall) %>%
+  select(-X2019_Team, -X2018_Team)
+
+wrscore_17_18 = data %>%
+  select(Player, 
+         X2017_Team, X2017_Yards, X2017_YardsRun, X2017_Targets, X2017_YardsPerRoute, X2017_OpenScore, X2017_CatchScore, X2017_YACScore, X2017_Overall,
+         X2018_Team, X2018_Yards, X2018_YardsRun, X2018_Targets, X2018_YardsPerRoute, X2018_OpenScore, X2018_CatchScore, X2018_YACScore, X2018_Overall
+         ) %>%
+  mutate(
+    team_change = 1 * (X2017_Team == X2018_Team), 
+    yards_delta = X2018_Yards - X2017_Yards, 
+    yardsrun_delta = X2018_YardsRun - X2017_YardsRun,
+    targets_delta = X2018_Targets - X2017_Targets,
+    yardsperroute_delta = X2018_YardsPerRoute - X2017_YardsPerRoute,
+    openscore_delta = X2018_OpenScore - X2017_OpenScore,
+    catchscore_delta = X2018_CatchScore - X2017_CatchScore,
+    yacscore_delta = X2018_YACScore - X2017_YACScore,
+    overall_delta = X2018_Overall - X2017_Overall) %>%
+  na.exclude() %>%
+  mutate(Player = paste(Player, "17-18")) %>%
+  rename(Y0_Yards = X2017_Yards,
+         Y1_Yards = X2018_Yards,
+         Y0_YardsRun = X2017_YardsRun,
+         Y1_YardsRun = X2018_YardsRun,
+         Y0_Targets = X2017_Targets,
+         Y1_Targets = X2018_Targets,
+         Y0_YardsPerRoute = X2017_YardsPerRoute,
+         Y1_YardsPerRoute = X2018_YardsPerRoute,
+         Y0_CatchScore = X2017_CatchScore,
+         Y1_CatchScore = X2018_CatchScore,
+         Y0_OpenScore = X2017_OpenScore,
+         Y1_OpenScore = X2018_OpenScore,
+         Y0_YACScore = X2017_YACScore,
+         Y1_YACScore = X2018_YACScore,
+         Y0_Overall = X2017_Overall,
+         Y1_Overall = X2018_Overall) %>%
+  select(-X2017_Team, -X2018_Team)
+
+
+
+fulldata_deltas = rbind(wrscore_21_22, wrscore_20_21, wrscore_19_20, wrscore_18_19, wrscore_17_18)
+```
+
+
+```{r}
+fulldata_deltas$overall_delta_abs = abs(fulldata_deltas$overall_delta)
+big_changes = 
+  fulldata_deltas %>%
+  arrange(-overall_delta_abs) %>%
+  filter(overall_delta_abs >= 10)
+
+set.seed(1491)
+
+sample <- sample(c(TRUE, FALSE), nrow(x_var), replace=TRUE, prob=c(0.8,0.2))
+train <- fulldata_deltas[sample, ]
+test <- fulldata_deltas[!sample, ]
+```
+
+
+```{r}
+wrscore.lm <- lm(formula = Y1_Overall ~ Y0_Yards + Y0_YardsRun + Y0_Targets + Y0_YardsPerRoute + Y0_CatchScore + Y0_OpenScore + Y0_YACScore + Y0_Overall + team_change,
+                 data = train)
+
+print(summary(wrscore.lm))
+
+
+wrscore.lm <- lm(formula = Y1_Overall ~ Y0_Yards + Y0_CatchScore + Y0_Overall,
+                 data = train)
+
+print(summary(wrscore.lm))
+
+```
+
+Try K-Means to see if there's clusters 
+
+```{r}
+library(cluster)    # clustering algorithms
+library(factoextra) # clustering algorithms & visualization
+
+fulldata_deltas_scaled <- fulldata_deltas
+fulldata_deltas_scaled[,c(2:27)] <- scale(fulldata_deltas_scaled[,c(2:27)])
+fulldata_deltas_scaled
+```
+
+```{r}
+fulldata_deltas_scaled <- na.omit(fulldata_deltas_scaled)
+k2 <- kmeans(fulldata_deltas_scaled[,c(2:27)], centers = 5, nstart = 25)
+str(k2)
+```
+
+Find optimal clusters
+```{r}
+set.seed(502)
+
+fviz_nbclust(fulldata_deltas_scaled[,c(2:27)], kmeans, method = "wss")
+
+```
+
+seems like 4 is optimal 
+
+```{r}
+k4 <- kmeans(fulldata_deltas_scaled[,c(2:27)], centers = 4, nstart = 25)
+str(k4)
+```
+
+
+```{r}
+table(k4$cluster)
+
+fulldata_deltas$k4_cluster = k4$cluster
+
+fulldata_deltas %>%
+  group_by(k4_cluster) %>%
+  summarise_if(is.numeric, mean)
+
+fviz_cluster(k4, data = fulldata_deltas_scaled[,c(2:27)])
+```
+
+Cluster 3 shows to be the breakouts! Low Y0 numbers, with a noticable jump in yards, yardsperroute, open score, and catchscore, with also the only groups to increase in yards per route and YAC score, and overall WR score
+- 
+
+```{r}
+fulldata_deltas %>%
+  filter(k4_cluster == 3) %>%
+  arrange(-Y0_Yards)
+```
+
+
+Create clusters, see with just Y0 data, see if theres any patterns
+
+
+```{r}
+
+set.seed(502)
+fviz_nbclust(fulldata_deltas_scaled[,c(2:9, 18)], kmeans, method = "wss", k.max = 15)
+
+fviz_nbclust(fulldata_deltas_scaled[,c(2:9, 18)], kmeans, method = "silhouette")
+
+
+gap_stat <- clusGap(fulldata_deltas_scaled[,c(2:9, 18)], FUN = kmeans, nstart = 25,
+                    K.max = 10, B = 50)
+fviz_gap_stat(gap_stat)
+```
+
+While elbow is definetly at 2 clusters, at 5 clusters we see a significant slope change in all 3 - so we'll use that for more groups.
+
+```{r}
+k0 <- kmeans(fulldata_deltas_scaled[,c(2:9, 18)], centers = 5, nstart = 25)
+str(k0)
+```
+
+
+```{r}
+fulldata_deltas$k0_cluster = k0$cluster
+fulldata_deltas %>%
+  group_by(k0_cluster) %>%
+  summarise_if(is.numeric, mean)
+```
+- only one group had a significant average overall_delta increase
+- increase in yards and yards per route, but on average decrease in targets
+--- had the lowest yards per route year 0, and did not have an increase in production
+- all stayed on the same team
+
+```{r}
+fviz_cluster(k0, data = fulldata_deltas_scaled[,c(2:9, 18)])
+```
+
+
+Specifically, those with a team change seem to have the most breakout potential
+```{r}
+fulldata_deltas %>%
+  filter(k0_cluster == 1) %>%
+  ggplot(aes(overall_delta)) +
+  geom_histogram(binwidth = 5)
+
+fulldata_deltas %>%
+  filter(k0_cluster == 1) %>%
+  ggplot(aes(overall_delta)) +
+  geom_histogram(binwidth = 5, color = 'blue', fill = 'lightblue') + 
+  theme_minimal() + 
+  labs(title = "Overall Score Delta Player Breakouts via KMeans Clustering",
+         subtitle = "Players in Cluster 1 who stayed on the same team, >50% increased by at least 10, others steady",
+         x = "Overall Score Delta", 
+         y = "Number of Players") 
+
+ggsave("../Images/BreakoutCluster_Histogram.png", bg = 'white')
+
+
+fulldata_deltas %>%
+  filter(k0_cluster == 1) %>%
+  ggplot(aes(Y0_Overall, Y1_Overall)) +
+  geom_point() +
+  geom_text_repel(aes(label=ifelse(overall_delta>15,as.character(Player),''))) +
+  geom_abline(slope=1, intercept = 0, color = 'black') +
+  geom_text(aes(40, 90, label = "Overall Score Increased",), color = 'lightgreen') +
+  geom_text(aes(60, 30, label = "Overall Score Decreased"), color = 'red') +
+    labs(title = "WR Score Breakout Players Y0 vs Y1 Overall",
+         subtitle = "Super Breakout Players (Increase of 15+) labeled",
+         x = "Year 0 WR Score", 
+         y = "Year 1 WR Score") +
+  theme_minimal() +
+    xlim(20, 80) +
+    ylim(20, 90)
+
+ggsave("../Images/BreakoutCluster_Y0vY1Overalls.png", bg = 'white')
+```
+
+Now with 24 breakouts identified, lets see if we can find the 2022 WRs that were closest to them, to predict the breakouts 
+
+```{r}
+teamchange_2022 = read.csv("../Data/2022TeamChange.csv", header = FALSE, col.names = c('Player', 'TeamChange'))
+teamchange_2022
+```
+
+```{r}
+data_2022 = 
+data %>%
+  select(c(1,48:55)) %>%
+  na.omit() %>%
+  mutate(team_change = teamchange_2022$TeamChange)
+
+colnames(data_2022) = c("Player", colnames(fulldata_deltas_scaled[,c(2:9, 18)]))
+data_2022_scaled = data_2022
+data_2022_scaled[,c(2:10)] = scale(data_2022[,c(2:10)])
+
+
+
+#install.packages("flexclust")
+library("flexclust")
+set.seed(502)
+cl1 = kcca(fulldata_deltas_scaled[,c(2:9, 18)], k=5, kccaFamily("kmeans"))
+cl1
+
+pred_train <- predict(cl1)
+pred_test <- predict(cl1, newdata = data_2022_scaled[,c(2:10)])
+
+image(cl1)
+points(fulldata_deltas_scaled[,c(2:9, 18)], col=pred_train, pch=19, cex=0.3)
+points(data_2022_scaled[,c(2:10)], col=pred_test, pch=22, bg="orange")
+```
+
+```{r}
+fulldata_deltas$cl_cluster = pred_train
+
+fulldata_deltas %>%
+  group_by(k0_cluster, cl_cluster) %>%
+  count()
+
+fulldata_deltas %>%
+  group_by(cl_cluster) %>%
+  summarise_if(is.numeric, mean)
+
+fulldata_deltas %>%
+  filter(cl_cluster == 4) %>%
+  ggplot(aes(overall_delta)) +
+  geom_histogram(binwidth = 5)
+
+fulldata_deltas %>%
+  select(Player, Y0_Overall, Y1_Overall, overall_delta, k0_cluster, cl_cluster) %>%
+  arrange(-overall_delta)
+```
+
+Cluster 1 in original Kmeans is aligned with cluster 4 here, so we can use this to predict
+```{r}
+data_2022$cl_cluster = pred_test
+
+data_2022 %>%
+  filter(cl_cluster == 4) %>%
+  arrange(-Y0_Yards)
+```
+
+24 Names to have in increase in Score, lets see what aligns with the top 10 increases (regardless of cluster), and see where we end up. We are looking for 
+
+- young players with ambigious roles in past years 
+- an above average amount of yards (~600-700)
+- low yards run (~400)
+- extremely low catchscore (20-30)
+
+```{r}
+fulldata_deltas %>%
+  arrange(-overall_delta) %>%
+  head(20) %>%
+  summarise_if(is.numeric, mean, na.rm = TRUE)
+```
+Top WR Breakouts
+Rebounds:
+- Gabe Davis
+- Marquez Valdes-Scantling
+Ascensions:
+- Alec Pierce 
+- Romeo Doubs	
+
